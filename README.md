@@ -1,3 +1,4 @@
+
 # RoadTruth - Traffic Intelligence Backend
 
 A robust, modular Python Flask backend for **RoadTruth**, a crowdsourced and authority-verified traffic intelligence platform built for a 24-hour hackathon.
