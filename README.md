@@ -1,74 +1,229 @@
+# RoadTruth
 
-# RoadTruth - Traffic Intelligence Backend
+## Why I Built RoadTruth
 
-A robust, modular Python Flask backend for **RoadTruth**, a crowdsourced and authority-verified traffic intelligence platform built for a 24-hour hackathon.
+Navigation apps like **Google Maps** and **Waze** are great at telling you *that* a road is slow. They rarely tell you *why*, whether the report is genuine, or whether the same junction has been failing for months.
 
----
+The idea for RoadTruth came from a real problem: an employer who regularly needed to understand why employees were arriving late. "There was traffic" is hard to verify, and nobody had a way to separate a genuine accident from a vague excuse, or a one-off jam from a recurring bottleneck.
 
-## 📋 Table of Contents
-1. [Architecture & Folder Structure](#-architecture--folder-structure)
-2. [Quickstart (Windows & VS Code)](#-quickstart-windows--vs-code)
-3. [Environment Configuration](#-environment-configuration)
-4. [Trust-Scoring System](#-trust-scoring-system)
-5. [Clearance-Time Estimation System](#-clearance-time-estimation-system)
-6. [Complete API Reference](#-complete-api-reference)
-7. [React Frontend Integration Guide (JavaScript fetch examples)](#-react-frontend-integration-guide)
-8. [Thunder Client & Postman Testing](#-thunder-client--postman-testing)
-9. [Automated Testing](#-automated-testing)
-10. [Known Limitations & External Dependencies](#-known-limitations--external-dependencies)
+That led to a simple question:
 
----
+> **Can traffic reports be verified instead of just trusted?**
 
-## 📁 Architecture & Folder Structure
+RoadTruth is a crowdsourced, authority-verified traffic intelligence backend. Citizens report incidents, other citizens corroborate them, and authorised officials can confirm or dispute them. Every report carries a **trust score**, a **clearance-time estimate**, and a place in a **historical record** that can reveal recurring problem zones.
+
+The core idea:
 
 ```text
-nexathon/
-├── .env.example                         # Template for environment settings
-├── .gitignore                           # Git ignore rules for Python, SQLite, env
-├── README.md                            # Comprehensive backend documentation
-├── requirements.txt                     # Root requirements file
-├── run.py                               # Self-bootstrapping launcher for virtualenv
-├── run_server.bat                       # One-click Windows launcher
-├── thunder-collection_roadtruth.json    # Native Thunder Client collection
-├── RoadTruth_API.postman_collection.json # Postman collection
-├── backend/
-│   ├── __init__.py                      # Package entrypoint & model exports
-│   ├── app.py                           # Flask app factory, CORS, routes & error handling
-│   ├── config.py                        # App configuration & CORS allowed origins
-│   ├── models.py                        # Incident & IncidentVerification models
-│   ├── validators.py                    # Schema, type, and coordinate validations
-│   ├── proximity.py                     # Haversine distance, duplicate check & nearby alerts
-│   ├── verification_service.py          # Trust-scoring, community consensus & official verification
-│   ├── clearance_service.py             # Baseline clearance duration & resolution lifecycle
-│   ├── analytics_service.py             # Heatmap data, spatial grid hotspots & database analytics
-│   ├── requirements.txt                 # Dependencies list
-│   └── instance/
-│       └── roadtruth.sqlite3            # Local SQLite database
-└── tests/
-    └── test_api.py                      # 19 automated unit & regression tests
+REPORT  →  VERIFY  →  ALERT  →  ANALYSE
 ```
+
+The application is built with Python, Flask, and SQLite, and was created for a 24-hour hackathon. It exposes a clean REST API designed to plug straight into a React frontend.
 
 ---
 
-## 🚀 Quickstart (Windows & VS Code)
+## Key Features
 
-### 1. Open in VS Code
-Open VS Code and navigate to `c:\Users\shrey\Downloads\nexathon`.
+* **Crowdsourced incident reporting**: Report accidents, congestion, roadwork, hazards, weather disruption, closures, and more.
+* **Trust scoring**: Every report gets a score from `0.00` to `1.00` that rises with corroboration and evidence.
+* **Authority verification**: Authorised officials can verify, dispute, or clear incidents.
+* **Community consensus**: Independent confirmations automatically promote a report to `verified`.
+* **Duplicate detection**: Nearby reports of the same type are linked rather than double counted.
+* **Clearance-time estimation**: Category-based baselines, plus actual vs. estimated duration tracking.
+* **Alternative routes**: Real routes from OSRM, ranked by incident risk and closure avoidance.
+* **Route alerts**: Incidents detected along any route corridor.
+* **Heatmaps and hotspots**: Map-ready points and 1 km grid clusters of recurring problem zones.
+* **Analytics**: Type distribution, status breakdown, and daily timelines.
+* **Token-based auth**: Role-based registration and login.
 
-### 2. Run the Backend Server
-In your VS Code terminal (PowerShell or Command Prompt):
-```powershell
+---
+
+## Project Structure
+
+```text
+RoadTruth/
+├── backend/
+│   ├── __init__.py                 # Package entrypoint & model exports
+│   ├── app.py                      # Flask app factory, CORS, routes & error handling
+│   ├── config.py                   # App configuration & CORS allowed origins
+│   ├── models.py                   # Incident & IncidentVerification models
+│   ├── validators.py               # Schema, type & coordinate validation
+│   ├── proximity.py                # Haversine distance, duplicate check & nearby alerts
+│   ├── verification_service.py     # Trust scoring, consensus & official verification
+│   ├── clearance_service.py        # Baseline clearance duration & resolution lifecycle
+│   ├── analytics_service.py        # Heatmap data, grid hotspots & analytics
+│   ├── requirements.txt            # Backend dependencies
+│   └── instance/
+│       └── roadtruth.sqlite3       # Local SQLite database (ignored)
+│
+├── tests/
+│   └── test_api.py                 # 32 automated unit & regression tests
+│
+├── docs/
+│   └── system_architecture.png     # System design diagram used in this README
+│
+├── .env.example                    # Environment variable template
+├── .gitignore
+├── requirements.txt                # Root requirements
+├── run.py                          # Self-bootstrapping launcher
+├── run_server.bat                  # One-click Windows launcher
+├── thunder-collection_roadtruth.json
+├── RoadTruth_API.postman_collection.json
+└── README.md
+```
+
+### Directory Overview
+
+| Path | Purpose |
+| ---- | ------- |
+| `backend/` | The Flask API. Each concern (verification, clearance, proximity, analytics) lives in its own service module. |
+| `tests/` | End-to-end API tests. External routing calls are mocked, so no internet is needed. |
+| `docs/` | Documentation assets, including the system design diagram. |
+| `run.py` | Creates a virtualenv, installs dependencies, and starts the server. |
+
+---
+
+## Architecture Overview
+
+1. A user registers or logs in and receives a signed Bearer token.
+2. They submit an incident with type, description, and coordinates.
+3. The backend validates the payload, assigns a baseline **trust score** and **clearance estimate**, and checks for nearby duplicates.
+4. Other users **confirm** or **dispute** the report. An authorised official can **verify**, **dispute**, or **clear** it.
+5. Trust score and status update automatically from the verification rules.
+6. Clients consume nearby incidents, route alerts, alternative routes, heatmaps, and hotspots.
+
+---
+
+## System Architecture
+
+![RoadTruth System Design](docs/system_architecture.png)
+
+The diagram above shows how RoadTruth processes requests, scores trust, verifies incidents, and serves routes and analytics.
+
+<details>
+<summary><b>View as a Mermaid diagram</b></summary>
+
+```mermaid
+flowchart TD
+    subgraph Client [React Frontend]
+        UI[User Interface]
+        UI --> Auth[Register / Login]
+        UI --> Report[Report Incident]
+        UI --> Verify[Confirm / Dispute]
+        UI --> Route[Route Planning]
+        UI --> Map[Heatmap & Analytics]
+    end
+
+    subgraph Server [Flask Backend]
+        Auth --> Token[Signed Bearer Token]
+        Report --> Validate[Validation]
+        Validate --> Dup[Duplicate Detection]
+        Dup --> Trust[Trust Scoring]
+        Verify --> Trust
+        Trust --> DB[(SQLite)]
+        Trust --> Clear[Clearance Estimation]
+        Clear --> DB
+        Route --> Risk[Route Risk Scoring]
+        Risk --> DB
+        Map --> Analytics[Hotspots & Analytics]
+        Analytics --> DB
+    end
+
+    Risk --> OSRM[(OSRM Routing Engine)]
+```
+
+</details>
+
+---
+
+## Trust-Scoring System
+
+All trust scores are normalised to **[0.00, 1.00]**.
+
+### Scoring Rules
+
+| Event | Effect |
+| ----- | ------ |
+| New report | Starts at **0.40** (or **0.60** with a photo/dashcam URL) |
+| Official verification | Sets score to **1.00**, status `verified` |
+| Citizen confirmation | **+0.15** each |
+| Citizen confirmation with proof URL | **+0.25** each |
+| Community cap (no official) | Maximum **0.85** |
+| Official dispute | Sets score to **0.10**, status `disputed` |
+| Citizen dispute | **−0.20** each |
+
+**Authorised roles:** `police`, `traffic_police`, `traffic_authority`, `emergency_service`, `road_operator`
+
+### Consensus Rules
+
+* **3 independent confirmations**, or **2 confirmations with photo evidence**, moves an incident from `pending` to `verified`.
+* **2 or more citizen disputes** moves it to `disputed`.
+
+### Anti-Spam and Fraud Guards
+
+* **Self-corroboration guard**: A reporter cannot verify their own report (`400 Bad Request`).
+* **Duplicate review guard**: One review per user per incident (`409 Conflict`), enforced by a database unique constraint.
+* **Duplicate proximity isolation**: Nearby reports of the same type are linked as potential duplicates and do not count as independent confirmations.
+
+---
+
+## Clearance-Time Estimation
+
+When no clearance time is supplied, a baseline is applied by category.
+
+| Category | Baseline | Typical scenario |
+| -------- | -------- | ---------------- |
+| `accident` | 60 min | Towing, debris sweep, lane reopening |
+| `congestion` | 45 min | Rush-hour dispersal |
+| `roadwork` | 240 min | Active repair or resurfacing window |
+| `closure` | 180 min | Structural barricades, major diversions |
+| `weather` / `weather_disruption` | 90 to 120 min | Waterlogging, storm runoff, low visibility |
+| `hazard` / `road_hazard` | 30 to 90 min | Debris, fallen branches, spills |
+| `roadblock` / `road_closure` | 120 min | Authority barricades, events, VIP diversions |
+| `breakdown` / `vehicle_breakdown` | 40 min | Tyre change or flatbed tow |
+| `other` | 60 min | General fallback |
+
+### Estimated vs. Actual
+
+| Field | Meaning |
+| ----- | ------- |
+| `estimated_clearance_time` | Projected time the road becomes clear |
+| `cleared_at` | UTC timestamp when an official marks it resolved |
+| `actual_duration_minutes` | Time between `created_at` and `cleared_at` |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+* Python **3.9+**
+* pip
+
+### Installation
+
+```bash
+git clone https://github.com/shreya15bhat/RoadTruth.git
+cd RoadTruth
+cp .env.example backend/.env
+```
+
+### Run the Server
+
+```bash
 python run.py
 ```
-*(Or double-click `run_server.bat` in Windows File Explorer).*
 
-The console will display:
+On Windows you can also double-click `run_server.bat`. Expected output:
+
 ```text
 >> Starting RoadTruth Backend on http://127.0.0.1:5000
 ```
 
-### 3. Verify Health Check
-Open in your browser: [http://127.0.0.1:5000/api/health](http://127.0.0.1:5000/api/health)
+### Verify It Works
+
+Open <http://127.0.0.1:5000/api/health>:
+
 ```json
 {
   "database": "connected",
@@ -78,352 +233,78 @@ Open in your browser: [http://127.0.0.1:5000/api/health](http://127.0.0.1:5000/a
 }
 ```
 
----
+### Environment Variables
 
-## ⚙️ Environment Configuration
-
-Copy [.env.example](file:///c:/Users/shrey/Downloads/nexathon/.env.example) to `.env`:
-```powershell
-cp .env.example backend/.env
-```
-
-| Variable | Default Value | Description |
-|---|---|---|
-| `PORT` | `5000` | Port for the Flask server |
-| `FLASK_DEBUG` | `True` | Enable Flask debug & live reloader |
-| `SECRET_KEY` | `roadtruth-hackathon-secret-key-2026` | App secret key (override in prod) |
-| `DATABASE_URL` | `sqlite:///backend/instance/roadtruth.sqlite3` | SQLite path |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:5173...` | Allowed React frontend origins |
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `PORT` | `5000` | Flask server port |
+| `FLASK_DEBUG` | `True` | Debug mode and live reloader |
+| `SECRET_KEY` | `roadtruth-hackathon-secret-key-2026` | Token signing key. **Override in production.** |
+| `DATABASE_URL` | `sqlite:///backend/instance/roadtruth.sqlite3` | Database location |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Allowed frontend origins |
+| `OFFICIAL_INVITE_CODE` | *(set on server)* | Required to register official accounts |
+| `ROUTING_PROVIDER_URL` | `https://router.project-osrm.org` | Routing engine endpoint |
 
 ---
 
-## 🛡️ Trust-Scoring System
+## API Reference
 
-### Scoring Formula
-All trust scores are normalized to the range **[0.00, 1.00]**:
-
-1. **Initial Uncorroborated Report**: Assigned a realistic starting baseline of **`0.40`** (or **`0.60`** if photo/dashcam URL evidence is provided).
-2. **Authorized Official Verification**:
-   - Authorized roles (`police`, `traffic_police`, `traffic_authority`, `emergency_service`, `road_operator`):
-   - Automatically sets `trust_score = 1.00` and `verification_status = 'verified'`.
-3. **Citizen Corroboration**:
-   - Each unique, independent citizen confirmation adds **`+0.15`** to trust score.
-   - Each confirmation with valid proof URL (`http://` or `https://`) adds **`+0.25`**.
-   - Maximum community consensus cap without official authorization: **`0.85`**.
-   - **Consensus Rule**: 3 independent citizen confirmations OR 2 confirmations with photo evidence automatically transition the incident status from `pending` to `verified`.
-4. **Disputes**:
-   - Official dispute sets `trust_score = 0.10` and `verification_status = 'disputed'`.
-   - Citizen disputes subtract **`-0.20`** per unique dispute. 2 or more citizen disputes transition the report to `disputed`.
-5. **Anti-Spam & Fraud Guards**:
-   - **Self-Corroboration Guard**: A reporter cannot verify or corroborate their own report (`400 Bad Request`).
-   - **Duplicate Review Guard**: A user cannot submit multiple reviews for the same incident (`409 Conflict`).
-   - **Duplicate Proximity Isolation**: Nearby reports of the same incident type are linked as potential duplicates; they do not count as independent confirmations unless submitted through the verification workflow.
-
-> [!WARNING]
-> **Authentication & Identity Disclaimer**:
-> This backend uses client-provided `reporter_id` and `verifier_id` for demonstration and hackathon simulation. In a production deployment with public untrusted users, secure session tokens, JWTs, or OAuth2 authentication must be used to prove identity.
-
----
-
-## ⏱️ Clearance-Time Estimation System
-
-### Baseline Estimates
-When an incident is reported without an explicit estimated clearance time, a category-based baseline duration is automatically calculated:
-
-| Incident Category | Baseline Duration | Typical Operational Scenario |
-|---|---|---|
-| `accident` | **60 minutes** | Vehicle towing, debris sweep, and lane reopening |
-| `congestion` | **45 minutes** | Typical rush-hour dispersal cycle |
-| `roadwork` | **240 minutes** (4 hrs) | Active road repair / resurfacing window |
-| `hazard` | **90 minutes** (1.5 hrs) | Fallen branch, spill, or obstacle clearing |
-| `weather` | **120 minutes** (2 hrs) | Localized waterlogging or storm runoff |
-| `closure` | **180 minutes** (3 hrs) | Structural barricades / major diversions |
-| `breakdown` / `vehicle_breakdown` | **40 minutes** | Roadside tyre change or flatbed tow |
-| `hazard` / `road_hazard` | **30 minutes** | Debris, fallen branches, road obstructions |
-| `weather` / `weather_disruption` | **90 minutes** | Local waterlogging, high winds, zero-visibility |
-| `roadblock` / `road_closure` | **120 minutes** | Authority barricades, public events, VIP diversions |
-| `other` | **60 minutes** | General default fallback |
-
-### Actual vs. Estimated Clearance
-- `estimated_clearance_time`: Calculated projection of when the roadway will become clear.
-- `cleared_at`: Actual recorded UTC timestamp when an authorized official or verified consensus marks the hazard resolved.
-- `actual_duration_minutes`: Computed duration between `created_at` and `cleared_at`.
-
----
-
-## 🚦 Complete API Reference
+### General and Auth
 
 | Method | Endpoint | Description |
-|---|---|---|
+| ------ | -------- | ----------- |
 | `GET` | `/` | API status and endpoint directory |
-| `GET` | `/api/health` | Health check & SQLite connectivity test |
-| `POST` | `/api/auth/register` | **NEW**: User registration with server-enforced role verification |
-| `POST` | `/api/auth/login` | **NEW**: Secure authentication returning signed Bearer token |
-| `GET` | `/api/auth/me` | **NEW**: Retrieve authenticated user profile |
+| `GET` | `/api/health` | Health check and database connectivity |
+| `POST` | `/api/auth/register` | Register a user (role verified server-side) |
+| `POST` | `/api/auth/login` | Log in and receive a signed Bearer token |
+| `GET` | `/api/auth/me` | Current user profile |
+
+### Incidents
+
+| Method | Endpoint | Description |
+| ------ | -------- | ----------- |
 | `GET` | `/api/incidents` | List incidents (`?status=`, `?type=`) |
-| `POST` | `/api/incidents` | Create a new incident report (safe server trust-score & duplicate detection) |
-| `GET` | `/api/incidents/<id>` | Fetch full details of an incident |
-| `POST` | `/api/incidents/<id>/verify` | Submit verification, supporting evidence, dispute, or consensus (server role-checked) |
-| `POST` | `/api/incidents/<id>/clear` | Mark incident officially cleared/resolved (authorized officials only) |
-| `GET` | `/api/incidents/<id>/verifications` | Retrieve supporting information and verification history |
-| `GET` | `/api/incidents/<id>/duplicates` | Detect proximity duplicates for an incident (`?radius_km=0.5`) |
+| `POST` | `/api/incidents` | Create an incident (trust score and duplicate detection applied) |
+| `GET` | `/api/incidents/<id>` | Full incident details |
+| `POST` | `/api/incidents/<id>/verify` | Confirm, dispute, or add evidence |
+| `POST` | `/api/incidents/<id>/clear` | Mark resolved (officials only) |
+| `GET` | `/api/incidents/<id>/verifications` | Verification history |
+| `GET` | `/api/incidents/<id>/duplicates` | Proximity duplicates (`?radius_km=0.5`) |
 | `POST` | `/api/incidents/check-duplicates` | Pre-flight duplicate check |
-| `GET` | `/api/incidents/nearby` | Find incidents near user coordinates (`?lat=&lon=&radius_km=`) |
-| `POST` | `/api/incidents/nearby` | Nearby incident search via JSON body |
-| `POST` | `/api/routes/alternatives` | Real alternative routes scored by RoadTruth incident risk & closure avoidance |
-| `POST` | `/api/routes/alerts` | Incident alerts detected along a custom route corridor buffer |
-| `GET` | `/api/incidents/heatmap` | Map-ready incident points for React Leaflet (supports all categories) |
-| `GET` | `/api/incidents/hotspots` | Spatial grid cell clusters of historical incidents |
-| `GET` | `/api/incidents/analytics` | Database analytics (type distribution, status, daily timeline) |
-| `GET` | `/api/incidents/stats/summary` | Summary count of total and by status |
+| `GET` / `POST` | `/api/incidents/nearby` | Incidents near a location (`latitude`, `longitude`, `radius_km`) |
 
----
+### Routing
 
-## ⚛️ React Frontend Integration Guide
+| Method | Endpoint | Description |
+| ------ | -------- | ----------- |
+| `POST` | `/api/routes/alternatives` | Alternative routes ranked by incident risk and closure avoidance |
+| `POST` | `/api/routes/alerts` | Incident alerts along a route corridor |
 
-The backend is configured with Flask-CORS to accept cross-origin requests from React dev servers (`http://localhost:5173` for Vite, `http://localhost:3000` for Create-React-App).
+### Analytics
 
-All examples use standard modern JavaScript `fetch()` with error and loading handling.
+| Method | Endpoint | Description |
+| ------ | -------- | ----------- |
+| `GET` | `/api/incidents/heatmap` | Map-ready points (React Leaflet) |
+| `GET` | `/api/incidents/hotspots` | 1 km grid clusters of historical incidents |
+| `GET` | `/api/incidents/analytics` | Type distribution, status breakdown, daily timeline |
+| `GET` | `/api/incidents/stats/summary` | Total and per-status counts |
 
-### Base API Configuration
-```javascript
-const API_BASE = "http://127.0.0.1:5000/api";
+### Example: Alternative Routes
 
-// Helper to get Bearer authorization header from localStorage
-function getAuthHeaders() {
-  const token = localStorage.getItem("roadtruth_token");
-  return token ? { "Authorization": `Bearer ${token}` } : {};
-}
-```
+**Request** `POST /api/routes/alternatives`
 
-### 0. User Registration & Login (Authentication & Role Handling)
-```javascript
-// Register a new citizen (or official with invite key)
-async function registerUser({ username, email, password, role = "citizen", officialKey = null }) {
-  const res = await fetch(`${API_BASE}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username,
-      email,
-      password,
-      role,
-      official_key: officialKey
-    })
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || data.error);
-  
-  // Store token in localStorage
-  localStorage.setItem("roadtruth_token", data.token);
-  return data.user;
-}
-
-// User login
-async function loginUser(usernameOrEmail, password) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: usernameOrEmail, password })
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || data.error);
-
-  localStorage.setItem("roadtruth_token", data.token);
-  return data.user; // { id, username, email, role, agency, ... }
-}
-```
-
-### 1. Create an Incident Report
-```javascript
-async function reportIncident(incidentData) {
-  try {
-    const res = await fetch(`${API_BASE}/incidents`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders()
-      },
-      body: JSON.stringify({
-        incident_type: incidentData.type, // e.g. "accident", "congestion", "roadblock"
-        description: incidentData.description,
-        location_name: incidentData.locationName,
-        latitude: incidentData.latitude,
-        longitude: incidentData.longitude
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || data.error || "Failed to create incident");
-    }
-
-    // data contains: id, trust_score, estimated_clearance_time, possible_duplicates
-    return data;
-  } catch (err) {
-    console.error("Report incident error:", err);
-    throw err;
-  }
-}
-```
-
-### 2. List Incidents with Optional Filtering
-```javascript
-async function fetchIncidents(filterType = null, filterStatus = null) {
-  try {
-    const params = new URLSearchParams();
-    if (filterType) params.append("type", filterType);
-    if (filterStatus) params.append("status", filterStatus);
-
-    const res = await fetch(`${API_BASE}/incidents?${params.toString()}`);
-    if (!res.ok) throw new Error("Failed to load incidents");
-
-    return await res.json(); // Array of incidents
-  } catch (err) {
-    console.error("Error loading incidents:", err);
-    return [];
-  }
-}
-```
-
-### 3. Verify an Incident / Submit Supporting Evidence
-```javascript
-async function submitVerification(incidentId, verificationData) {
-  try {
-    const res = await fetch(`${API_BASE}/incidents/${incidentId}/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        verifier_id: verificationData.userId,
-        verifier_role: verificationData.role || "citizen", // "citizen" or "traffic_police"
-        action: verificationData.action || "confirm",      // "confirm", "dispute", "clear"
-        supporting_info: verificationData.notes,
-        evidence_url: verificationData.evidenceUrl || null
-      })
-    });
-
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.message || result.error);
-    return result; // { message, rationale, incident, verification }
-  } catch (err) {
-    console.error("Verification error:", err);
-    throw err;
-  }
-}
-```
-
-### 4. Fetch Nearby Incidents (User's Current Location Alerts)
-```javascript
-async function getNearbyAlerts(userLat, userLon, radiusKm = 5.0) {
-  try {
-    const res = await fetch(
-      `${API_BASE}/incidents/nearby?latitude=${userLat}&longitude=${userLon}&radius_km=${radiusKm}`
-    );
-    if (!res.ok) throw new Error("Failed to fetch nearby alerts");
-    
-    const data = await res.json();
-    return data.incidents; // Array of incidents sorted closest first
-  } catch (err) {
-    console.error("Nearby alerts error:", err);
-    return [];
-  }
-}
-```
-
-### 5. Fetch Heatmap Points (React Leaflet Integration)
-```javascript
-async function loadHeatmapData(boundingBox = null) {
-  try {
-    let url = `${API_BASE}/incidents/heatmap`;
-    if (boundingBox) {
-      const { minLat, maxLat, minLon, maxLon } = boundingBox;
-      url += `?min_lat=${minLat}&max_lat=${maxLat}&min_lon=${minLon}&max_lon=${maxLon}`;
-    }
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Failed to load heatmap data");
-
-    const data = await res.json();
-    // Leaflet heatmap format: [[lat, lon, intensity], ...]
-    return data.points.map(pt => [
-      pt.latitude,
-      pt.longitude,
-      pt.trust_score // Intensity weight 0.0 - 1.0
-    ]);
-  } catch (err) {
-    console.error("Heatmap loading error:", err);
-    return [];
-  }
-}
-```
-
-### 6. Fetch Analytics & Historical Hotspots
-```javascript
-async function loadAnalytics() {
-  try {
-    const [analyticsRes, hotspotsRes] = await Promise.all([
-      fetch(`${API_BASE}/incidents/analytics`),
-      fetch(`${API_BASE}/incidents/hotspots`)
-    ]);
-
-    const analytics = await analyticsRes.json();
-    const hotspots = await hotspotsRes.json();
-
-    return { analytics, hotspots };
-  } catch (err) {
-    console.error("Error loading analytics:", err);
-    throw err;
-  }
-}
-```
-
-### 7. Alternative Route Suggestions (With Risk Scoring & Closure Avoidance)
-```javascript
-/**
- * Queries alternative routes between origin and destination, evaluates active RoadTruth incidents,
- * detects confirmed roadblocks, computes risk scores, and returns ranked alternatives.
- */
-async function getAlternativeRoutes(originCoords, destCoords, corridorBufferMeters = 200.0) {
-  try {
-    const res = await fetch(`${API_BASE}/routes/alternatives`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        origin: { latitude: originCoords.lat, longitude: originCoords.lon },
-        destination: { latitude: destCoords.lat, longitude: destCoords.lon },
-        corridor_buffer_meters: corridorBufferMeters
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || data.error || "Failed to calculate alternative routes");
-    }
-
-    // Recommended route is ranked #1 (routes[0])
-    console.log("Recommended route:", data.recommended_route_id);
-    return data.routes; // Array with distance, duration, risk_score, geometry GeoJSON, recommendation_reason
-  } catch (err) {
-    console.error("Alternative routing error:", err);
-    throw err;
-  }
-}
-```
-
-#### Example Request: `POST /api/routes/alternatives`
 ```json
 {
-  "origin": {"latitude": 12.9716, "longitude": 77.5946},
-  "destination": {"latitude": 12.9352, "longitude": 77.6245},
+  "origin": { "latitude": 12.9716, "longitude": 77.5946 },
+  "destination": { "latitude": 12.9352, "longitude": 77.6245 },
   "corridor_buffer_meters": 200.0
 }
 ```
 
-#### Example Response: `POST /api/routes/alternatives`
+**Response** (trimmed)
+
 ```json
 {
-  "origin": {"latitude": 12.9716, "longitude": 77.5946},
-  "destination": {"latitude": 12.9352, "longitude": 77.6245},
   "total_routes_found": 2,
   "recommended_route_id": "route_2",
   "traffic_disclaimer": "Travel times are routing estimates based on road network speed limits. Road closures and incident risk scores reflect live RoadTruth community and authority reports.",
@@ -439,13 +320,8 @@ async function getAlternativeRoutes(originCoords, destCoords, corridorBufferMete
       "duration_type": "routing_engine_estimate",
       "risk_score": 1.25,
       "has_confirmed_closure": false,
-      "has_pending_closure": false,
       "incident_count": 1,
-      "relevant_incidents": [...],
-      "geometry": {
-        "type": "LineString",
-        "coordinates": [[77.5946, 12.9716], [77.6150, 12.9550], [77.6245, 12.9352]]
-      }
+      "geometry": { "type": "LineString", "coordinates": [[77.5946, 12.9716], [77.6245, 12.9352]] }
     },
     {
       "route_id": "route_1",
@@ -453,100 +329,249 @@ async function getAlternativeRoutes(originCoords, destCoords, corridorBufferMete
       "rank": 2,
       "is_recommended": false,
       "recommendation_reason": "Discouraged: Verified road closure or roadblock detected directly along this corridor.",
-      "distance_km": 5.0,
-      "estimated_duration_minutes": 10,
-      "duration_type": "routing_engine_estimate",
       "risk_score": 100.0,
-      "has_confirmed_closure": true,
-      "geometry": { ... }
+      "has_confirmed_closure": true
     }
   ]
 }
 ```
 
-### 8. Route-Based Incident Alerts
+---
+
+## React Frontend Integration
+
+CORS is preconfigured for Vite (`http://localhost:5173`) and Create React App (`http://localhost:3000`).
+
 ```javascript
-/**
- * Scans a route's geometry coordinates against active RoadTruth incidents
- * situated within the corridor buffer (e.g. 250 meters).
- */
-async function getRouteAlerts(routeCoordinatesGeoJSON, bufferMeters = 250.0) {
-  try {
-    const res = await fetch(`${API_BASE}/routes/alerts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        route_coordinates: routeCoordinatesGeoJSON, // [[lon, lat], ...]
-        buffer_meters: bufferMeters
-      })
-    });
+const API_BASE = "http://127.0.0.1:5000/api";
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || data.error);
-
-    return data.alerts; // Array with incident_type, distance_from_route_meters, trust_score, etc.
-  } catch (err) {
-    console.error("Route alerts error:", err);
-    return [];
-  }
+function getAuthHeaders() {
+  const token = localStorage.getItem("roadtruth_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 ```
 
+<details>
+<summary><b>Register and log in</b></summary>
+
+```javascript
+async function loginUser(usernameOrEmail, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: usernameOrEmail, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error);
+
+  localStorage.setItem("roadtruth_token", data.token);
+  return data.user; // { id, username, email, role, agency, ... }
+}
+```
+
+Registration is the same shape against `/auth/register`, with `username`, `email`, `password`, `role`, and (for officials only) `official_key`.
+
+</details>
+
+<details>
+<summary><b>Report an incident</b></summary>
+
+```javascript
+async function reportIncident({ type, description, locationName, latitude, longitude }) {
+  const res = await fetch(`${API_BASE}/incidents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({
+      incident_type: type, // "accident", "congestion", "roadblock", ...
+      description,
+      location_name: locationName,
+      latitude,
+      longitude,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error);
+  return data; // id, trust_score, estimated_clearance_time, possible_duplicates
+}
+```
+
+</details>
+
+<details>
+<summary><b>Confirm, dispute, or add evidence</b></summary>
+
+```javascript
+async function submitVerification(incidentId, { action = "confirm", notes, evidenceUrl }) {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({
+      action, // "confirm" | "dispute" | "clear"
+      supporting_info: notes,
+      evidence_url: evidenceUrl || null,
+    }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || result.error);
+  return result; // { message, rationale, incident, verification }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Nearby alerts</b></summary>
+
+```javascript
+async function getNearbyAlerts(latitude, longitude, radiusKm = 5) {
+  const res = await fetch(
+    `${API_BASE}/incidents/nearby?latitude=${latitude}&longitude=${longitude}&radius_km=${radiusKm}`
+  );
+  if (!res.ok) throw new Error("Failed to fetch nearby alerts");
+  return (await res.json()).incidents; // closest first
+}
+```
+
+</details>
+
+<details>
+<summary><b>Heatmap points (React Leaflet)</b></summary>
+
+```javascript
+async function loadHeatmapData() {
+  const res = await fetch(`${API_BASE}/incidents/heatmap`);
+  const data = await res.json();
+  return data.points.map((p) => [p.latitude, p.longitude, p.trust_score]);
+}
+```
+
+</details>
+
+<details>
+<summary><b>Alternative routes and route alerts</b></summary>
+
+```javascript
+async function getAlternativeRoutes(origin, dest, bufferMeters = 200) {
+  const res = await fetch(`${API_BASE}/routes/alternatives`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      origin: { latitude: origin.lat, longitude: origin.lon },
+      destination: { latitude: dest.lat, longitude: dest.lon },
+      corridor_buffer_meters: bufferMeters,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error);
+  return data.routes; // routes[0] is the recommended route
+}
+
+async function getRouteAlerts(routeCoordinates, bufferMeters = 250) {
+  const res = await fetch(`${API_BASE}/routes/alerts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ route_coordinates: routeCoordinates, buffer_meters: bufferMeters }), // [[lon, lat], ...]
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || data.error);
+  return data.alerts;
+}
+```
+
+</details>
+
 ---
 
-## ⚡ Thunder Client & Postman Testing
+## Testing the API
 
-### Thunder Client (VS Code)
-1. Install **Thunder Client** in VS Code.
-2. In the Thunder Client tab, click **Collections -> ... (Menu) -> Import**.
-3. Select **Thunder Client Collection** and choose:
-   `c:\Users\shrey\Downloads\nexathon\thunder-collection_roadtruth.json`
-4. **17 pre-configured requests** covering all endpoints (including Auth Registration, Login, Profile, Incidents, Verification, Clearance, Hotspots, Analytics, Alternative Routes & Route Alerts) are available to test with one click.
+### Automated Tests
 
-### Postman
-Import [RoadTruth_API.postman_collection.json](file:///c:/Users/shrey/Downloads/nexathon/RoadTruth_API.postman_collection.json) via **File -> Import**.
-
----
-
-## 🧪 Automated Testing
-
-To run the automated test suite covering all phases, security controls, and features:
-```powershell
+```bash
 python -m unittest tests/test_api.py
 ```
-**Actual Test Results**:
+
 ```text
-................................
-----------------------------------------------------------------------
 Ran 32 tests in 2.798s
 
 OK
 ```
 
-All 32 automated tests pass completely without external internet dependencies (external routing calls are mocked via `unittest.mock.patch`).
+All tests run without internet access. External routing calls are mocked with `unittest.mock.patch`.
+
+### Thunder Client (VS Code)
+
+1. Install the **Thunder Client** extension.
+2. Go to **Collections → ⋯ → Import** and choose `thunder-collection_roadtruth.json`.
+3. Run any of the 17 pre-configured requests, covering auth, incidents, verification, clearance, hotspots, analytics, routes, and alerts.
+
+### Postman
+
+Import `RoadTruth_API.postman_collection.json` via **File → Import**.
 
 ---
 
-## ⚠️ Known Limitations & External Dependencies
+## Security and Access Control
 
-1. **Routing Estimates vs. Live Traffic Data**:
-   - The route duration (`estimated_duration_minutes`) returned by the routing engine is based on standard road network speed limits and baseline distance physics.
-   - It is explicitly labeled as `duration_type: "routing_engine_estimate"`, NOT live congestion sensor flow.
-   - RoadTruth's traffic intelligence score (`risk_score`) and closure flags reflect verified community and authority reported events.
-2. **External Routing Engine**:
-   - The routing service defaults to OpenStreetMap's public OSRM router (`ROUTING_PROVIDER_URL=https://router.project-osrm.org`).
-   - If the external engine is unreachable, the API returns HTTP 503 rather than fabricating fake routes or travel times.
-   - For offline deployment or high-throughput production, point `ROUTING_PROVIDER_URL` to a local Dockerized OSRM container or enterprise routing gateway.
-3. **Authentication & Access Control**:
-   - RoadTruth implements token-based authentication via `POST /api/auth/register` and `POST /api/auth/login` using cryptographic URL-safe serializer tokens (`itsdangerous`) and hashed passwords (`werkzeug.security`).
-   - Official registration (`traffic_police`, `transport_authority`, `admin`) requires a valid server-side `OFFICIAL_INVITE_CODE`.
-   - Incident clearance (`POST /api/incidents/<id>/clear`) strictly requires official authorization.
-   - Official verification can only be performed by authenticated official accounts; citizen accounts provide community confirmations.
-   - Self-verification is blocked on the server, and duplicate verifications by the same user are rejected via database unique constraints.
-4. **Historical Hotspots vs. Real-Time Speeds**:
-   - Historical hotspots group incident reports into geographic 1km grid cells to identify recurring problem zones. They do not represent live vehicle loop detector counts.
-5. **Future Non-Blocking Enhancements**:
-   - Deep learning accident detection computer vision pipeline (dataset & pre-trained weights to be hooked in post-hackathon).
-   - Employer journey fleet tracking (deferred until explicit driver consent and organizational RBAC are fully modeled).
+* Passwords are hashed with `werkzeug.security`.
+* Tokens are signed, URL-safe serialized tokens (`itsdangerous`).
+* Official registration (`traffic_police`, `transport_authority`, `admin`) requires a server-side `OFFICIAL_INVITE_CODE`.
+* Incident clearance and official verification require an authenticated official account.
+* Self-verification is blocked, and duplicate reviews are rejected at the database level.
+* Change `SECRET_KEY` before any real deployment.
 
+---
 
+## Tech Stack
+
+### Backend
+
+* **Python and Flask**: REST API and routing.
+* **Flask-CORS**: Cross-origin support for React dev servers.
+* **SQLite**: Lightweight local storage.
+* **itsdangerous and Werkzeug**: Token signing and password hashing.
+* **OSRM (OpenStreetMap)**: Alternative route generation.
+
+### Frontend (Integration Target)
+
+* **React** with **Vite**.
+* **React Leaflet**: Heatmaps and incident maps.
+
+---
+
+## Known Limitations
+
+1. **Routing estimates are not live traffic.** `estimated_duration_minutes` comes from road network speed limits and is labelled `duration_type: "routing_engine_estimate"`. The `risk_score` and closure flags reflect RoadTruth community and authority reports.
+2. **External routing dependency.** The default is the public OSRM server. If it is unreachable, the API returns **HTTP 503** rather than inventing routes. For production, point `ROUTING_PROVIDER_URL` at a self-hosted OSRM container.
+3. **Hotspots are historical.** They group reports into 1 km grid cells to find recurring problem zones. They are not live sensor counts.
+4. **SQLite is for development.** Move to PostgreSQL with PostGIS for production-scale geospatial queries.
+
+---
+
+## Roadmap
+
+Ideas from the original problem statement that are not yet built:
+
+- [ ] **Employer dashboard**: Employee journey status and delay verification. Deferred until explicit employee consent and organisational role-based access are properly modelled.
+- [ ] **GPS speed verification**: Confirm congestion using speed and duration data, not just reports.
+- [ ] **AI incident classification**: Photo-based hints for accidents, flooding, landslides, and fallen trees, always subject to verification.
+- [ ] **Traffic prediction**: Forecast congestion windows from historical data.
+- [ ] **Monthly reports**: Auto-generated statistics by cause, location, and delay hours.
+- [ ] **Push notifications**: Alerts for affected routes.
+
+---
+
+## Learning and Inspiration
+
+This project started from a real employer pain point: verifying why people are late, and understanding which roads fail repeatedly. The original problem statement ("RoadAlert / TrafficSense") was drafted with ChatGPT from that input, and RoadTruth is a focused, working slice of it:
+
+```text
+Incident → Data → Evidence → Analysis → Infrastructure Decision
+```
+
+Traffic engineering decisions always remain with the competent authority. RoadTruth only supplies the evidence.
+
+---
+
+## Author
+
+Built by [Shreya Bhat](https://github.com/shreya15bhat) as part of a 24-hour hackathon.
