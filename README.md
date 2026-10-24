@@ -96,7 +96,7 @@ RoadTruth/
 
 ## System Architecture
 
-![RoadTruth System Design](docs/system_architecture.png)
+![RoadTruth System Design](system_architecture.png)
 
 The diagram above shows how RoadTruth processes requests, scores trust, verifies incidents, and serves routes and analytics.
 
